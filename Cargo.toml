@@ -2,6 +2,9 @@
 name = "tdo"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/drivasperez/tdo"
+description = "A machine-friendly CLI for querying and writing to the Things 3 database on macOS"
+homepage = "https://github.com/drivasperez/tdo"
 
 [[bin]]
 name = "tdo"
@@ -13,3 +16,8 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 glob = "0.3"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
