@@ -1,0 +1,16 @@
+@schema {id crate:tracey-config@1, cli tracey}
+
+specs (
+  {
+    name tdo-spec
+    include (docs/spec/**/*.md)
+    impls (
+      {
+        name rust
+        include (src/**/*.rs tests/**/*.rs)
+        exclude (target/**)
+        test_include (tests/**/*.rs)
+      }
+    )
+  }
+)
