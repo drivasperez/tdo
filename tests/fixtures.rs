@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -28,7 +28,8 @@ pub fn create_fixture_db() -> FixtureDb {
     let conn = rusqlite::Connection::open(&path).expect("failed to create fixture db");
 
     // Create schema
-    conn.execute_batch("
+    conn.execute_batch(
+        "
         CREATE TABLE TMArea (
             uuid TEXT PRIMARY KEY,
             title TEXT,
@@ -120,23 +121,34 @@ pub fn create_fixture_db() -> FixtureDb {
             uriSchemeAuthenticationToken TEXT,
             experimental BLOB
         );
-    ").expect("failed to create schema");
+    ",
+    )
+    .expect("failed to create schema");
 
     // Insert areas
     conn.execute(
         "INSERT INTO TMArea (uuid, title, visible, 'index') VALUES (?1, ?2, ?3, ?4)",
         rusqlite::params!["area-work-1", "Work", 1, 0],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert tags
     conn.execute(
         "INSERT INTO TMTag (uuid, title, shortcut, parent, 'index') VALUES (?1, ?2, ?3, ?4, ?5)",
         rusqlite::params!["tag-urgent-1", "urgent", "u", rusqlite::types::Null, 0],
-    ).unwrap();
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO TMTag (uuid, title, shortcut, parent, 'index') VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params!["tag-home-1", "home", rusqlite::types::Null, rusqlite::types::Null, 1],
-    ).unwrap();
+        rusqlite::params![
+            "tag-home-1",
+            "home",
+            rusqlite::types::Null,
+            rusqlite::types::Null,
+            1
+        ],
+    )
+    .unwrap();
 
     // Insert a project (type=1)
     conn.execute(
@@ -144,32 +156,37 @@ pub fn create_fixture_db() -> FixtureDb {
          openUntrashedLeafActionsCount) \
          VALUES (?1, 1, 0, 0, ?2, 1, 0, ?3, 2)",
         rusqlite::params!["project-test-1", "Test Project", "area-work-1"],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert inbox task (start=0, no project, no area)
     conn.execute(
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, 'index') \
          VALUES (?1, 0, 0, 0, ?2, 0, 0)",
         rusqlite::params!["task-inbox-1", "Inbox task"],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert today task (start=1)
     conn.execute(
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, todayIndex, 'index') \
          VALUES (?1, 0, 0, 0, ?2, 1, 1, 1)",
         rusqlite::params!["task-today-1", "Today task"],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert today task with tag
     conn.execute(
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, todayIndex, 'index') \
          VALUES (?1, 0, 0, 0, ?2, 1, 2, 2)",
         rusqlite::params!["task-today-tagged-1", "Today tagged task"],
-    ).unwrap();
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO TMTaskTag (tasks, tags) VALUES (?1, ?2)",
         rusqlite::params!["task-today-tagged-1", "tag-urgent-1"],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert today task in project
     conn.execute(
@@ -185,35 +202,40 @@ pub fn create_fixture_db() -> FixtureDb {
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, startDate, 'index') \
          VALUES (?1, 0, 0, 0, ?2, 1, ?3, 4)",
         rusqlite::params!["task-upcoming-1", "Upcoming task", upcoming_date],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert anytime task (start=1 but no todayIndex)
     conn.execute(
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, 'index') \
          VALUES (?1, 0, 0, 0, ?2, 1, 5)",
         rusqlite::params!["task-anytime-1", "Anytime task"],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert someday task (start=2)
     conn.execute(
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, 'index') \
          VALUES (?1, 0, 0, 0, ?2, 2, 6)",
         rusqlite::params!["task-someday-1", "Someday task"],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert completed task (status=3)
     conn.execute(
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, 'index', stopDate) \
          VALUES (?1, 0, 3, 0, ?2, 1, 7, ?3)",
         rusqlite::params!["task-completed-1", "Completed task", 1700000000.0_f64],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert second completed task (older)
     conn.execute(
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, 'index', stopDate) \
          VALUES (?1, 0, 3, 0, ?2, 1, 8, ?3)",
         rusqlite::params!["task-completed-2", "Older completed task", 1690000000.0_f64],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert task with checklist items
     conn.execute(
@@ -221,7 +243,8 @@ pub fn create_fixture_db() -> FixtureDb {
          checklistItemsCount, openChecklistItemsCount) \
          VALUES (?1, 0, 0, 0, ?2, 1, 9, 2, 1)",
         rusqlite::params!["task-checklist-1", "Task with checklist"],
-    ).unwrap();
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO TMChecklistItem (uuid, title, status, task, 'index') VALUES (?1, ?2, 0, ?3, 0)",
         rusqlite::params!["cl-1", "Step 1", "task-checklist-1"],
@@ -237,7 +260,8 @@ pub fn create_fixture_db() -> FixtureDb {
         "INSERT INTO TMTask (uuid, type, status, trashed, title, start, deadline, 'index') \
          VALUES (?1, 0, 0, 0, ?2, 0, ?3, 10)",
         rusqlite::params!["task-deadline-1", "Task with deadline", deadline_date],
-    ).unwrap();
+    )
+    .unwrap();
 
     FixtureDb { path }
 }

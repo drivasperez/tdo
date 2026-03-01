@@ -25,7 +25,7 @@ fn get_tags(conn: &Connection, task_uuid: &str) -> Result<String, Error> {
         "SELECT TMTag.title FROM TMTaskTag \
          JOIN TMTag ON TMTaskTag.tags = TMTag.uuid \
          WHERE TMTaskTag.tasks = ? \
-         ORDER BY TMTag.\"index\""
+         ORDER BY TMTag.\"index\"",
     )?;
     let tags: Vec<String> = stmt
         .query_map([task_uuid], |row| row.get::<_, String>(0))?
@@ -52,28 +52,50 @@ fn task_row(conn: &Connection, uuid: &str, data: TaskData) -> Result<Row, Error>
     row.set("title", Value::String(data.title));
 
     let tags = get_tags(conn, uuid)?;
-    row.set("tags", if tags.is_empty() { Value::Null } else { Value::String(tags) });
+    row.set(
+        "tags",
+        if tags.is_empty() {
+            Value::Null
+        } else {
+            Value::String(tags)
+        },
+    );
 
-    row.set("project", match data.project_title {
-        Some(ref p) => Value::String(p.clone()),
-        None => Value::Null,
-    });
-    row.set("area", match data.area_title {
-        Some(ref a) => Value::String(a.clone()),
-        None => Value::Null,
-    });
-    row.set("startDate", match data.start_date.and_then(dates::decode_things_date) {
-        Some(d) => Value::String(d),
-        None => Value::Null,
-    });
-    row.set("deadline", match data.deadline.and_then(dates::decode_things_date) {
-        Some(d) => Value::String(d),
-        None => Value::Null,
-    });
-    row.set("completedDate", match data.stop_date {
-        Some(ts) if ts > 0.0 => Value::String(dates::unix_timestamp_to_date(ts)),
-        _ => Value::Null,
-    });
+    row.set(
+        "project",
+        match data.project_title {
+            Some(ref p) => Value::String(p.clone()),
+            None => Value::Null,
+        },
+    );
+    row.set(
+        "area",
+        match data.area_title {
+            Some(ref a) => Value::String(a.clone()),
+            None => Value::Null,
+        },
+    );
+    row.set(
+        "startDate",
+        match data.start_date.and_then(dates::decode_things_date) {
+            Some(d) => Value::String(d),
+            None => Value::Null,
+        },
+    );
+    row.set(
+        "deadline",
+        match data.deadline.and_then(dates::decode_things_date) {
+            Some(d) => Value::String(d),
+            None => Value::Null,
+        },
+    );
+    row.set(
+        "completedDate",
+        match data.stop_date {
+            Some(ts) if ts > 0.0 => Value::String(dates::unix_timestamp_to_date(ts)),
+            _ => Value::Null,
+        },
+    );
     if let Some(s) = data.status {
         let status_str = match s {
             0 => "open",
@@ -86,8 +108,7 @@ fn task_row(conn: &Connection, uuid: &str, data: TaskData) -> Result<Row, Error>
     Ok(row)
 }
 
-const TASK_SELECT: &str =
-    "SELECT t.uuid, t.title, \
+const TASK_SELECT: &str = "SELECT t.uuid, t.title, \
      p.title AS projectTitle, \
      a.title AS areaTitle, \
      t.startDate, t.deadline, t.stopDate, t.status \
@@ -95,7 +116,12 @@ const TASK_SELECT: &str =
      LEFT JOIN TMTask p ON t.project = p.uuid AND p.type = 1 \
      LEFT JOIN TMArea a ON t.area = a.uuid";
 
-fn query_tasks(conn: &Connection, where_clause: &str, order: &str, params: &[&dyn rusqlite::types::ToSql]) -> Result<Vec<Row>, Error> {
+fn query_tasks(
+    conn: &Connection,
+    where_clause: &str,
+    order: &str,
+    params: &[&dyn rusqlite::types::ToSql],
+) -> Result<Vec<Row>, Error> {
     let sql = format!("{TASK_SELECT} WHERE {where_clause} ORDER BY {order}");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params, |row| {
@@ -114,10 +140,19 @@ fn query_tasks(conn: &Connection, where_clause: &str, order: &str, params: &[&dy
     let mut result = Vec::new();
     for r in rows {
         let (uuid, title, proj, area, sd, dl, stop, status) = r?;
-        result.push(task_row(conn, &uuid, TaskData {
-            title, project_title: proj, area_title: area,
-            start_date: sd, deadline: dl, stop_date: stop, status,
-        })?);
+        result.push(task_row(
+            conn,
+            &uuid,
+            TaskData {
+                title,
+                project_title: proj,
+                area_title: area,
+                start_date: sd,
+                deadline: dl,
+                stop_date: stop,
+                status,
+            },
+        )?);
     }
     Ok(result)
 }
@@ -190,17 +225,25 @@ pub fn logbook(conn: &Connection, limit: u32) -> Result<Vec<Row>, Error> {
     let mut result = Vec::new();
     for r in rows {
         let (uuid, title, proj, area, sd, dl, stop, status) = r?;
-        result.push(task_row(conn, &uuid, TaskData {
-            title, project_title: proj, area_title: area,
-            start_date: sd, deadline: dl, stop_date: stop, status,
-        })?);
+        result.push(task_row(
+            conn,
+            &uuid,
+            TaskData {
+                title,
+                project_title: proj,
+                area_title: area,
+                start_date: sd,
+                deadline: dl,
+                stop_date: stop,
+                status,
+            },
+        )?);
     }
     Ok(result)
 }
 
 pub fn projects(conn: &Connection) -> Result<Vec<Row>, Error> {
-    let sql =
-        "SELECT t.uuid, t.title, a.title AS areaTitle, \
+    let sql = "SELECT t.uuid, t.title, a.title AS areaTitle, \
          t.deadline, t.openUntrashedLeafActionsCount \
          FROM TMTask t \
          LEFT JOIN TMArea a ON t.area = a.uuid \
@@ -222,26 +265,41 @@ pub fn projects(conn: &Connection) -> Result<Vec<Row>, Error> {
         let mut row = Row::new();
         row.set("id", Value::String(uuid.clone()));
         row.set("title", Value::String(title));
-        row.set("area", match area {
-            Some(a) => Value::String(a),
-            None => Value::Null,
-        });
+        row.set(
+            "area",
+            match area {
+                Some(a) => Value::String(a),
+                None => Value::Null,
+            },
+        );
         let tags = get_tags(conn, &uuid)?;
-        row.set("tags", if tags.is_empty() { Value::Null } else { Value::String(tags) });
-        row.set("deadline", match deadline.and_then(dates::decode_things_date) {
-            Some(d) => Value::String(d),
-            None => Value::Null,
-        });
-        row.set("openTasks", Value::Number(serde_json::Number::from(open_tasks.unwrap_or(0))));
+        row.set(
+            "tags",
+            if tags.is_empty() {
+                Value::Null
+            } else {
+                Value::String(tags)
+            },
+        );
+        row.set(
+            "deadline",
+            match deadline.and_then(dates::decode_things_date) {
+                Some(d) => Value::String(d),
+                None => Value::Null,
+            },
+        );
+        row.set(
+            "openTasks",
+            Value::Number(serde_json::Number::from(open_tasks.unwrap_or(0))),
+        );
         result.push(row);
     }
     Ok(result)
 }
 
 pub fn areas(conn: &Connection) -> Result<Vec<Row>, Error> {
-    let mut stmt = conn.prepare(
-        "SELECT uuid, title FROM TMArea WHERE visible = 1 ORDER BY \"index\""
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT uuid, title FROM TMArea WHERE visible = 1 ORDER BY \"index\"")?;
     let rows = stmt.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;
@@ -261,7 +319,7 @@ pub fn tags(conn: &Connection) -> Result<Vec<Row>, Error> {
         "SELECT t.uuid, t.title, t.shortcut, p.title AS parentTitle \
          FROM TMTag t \
          LEFT JOIN TMTag p ON t.parent = p.uuid \
-         ORDER BY t.\"index\""
+         ORDER BY t.\"index\"",
     )?;
     let rows = stmt.query_map([], |row| {
         Ok((
@@ -277,14 +335,20 @@ pub fn tags(conn: &Connection) -> Result<Vec<Row>, Error> {
         let mut row = Row::new();
         row.set("id", Value::String(uuid));
         row.set("title", Value::String(title));
-        row.set("shortcut", match shortcut {
-            Some(s) if !s.is_empty() => Value::String(s),
-            _ => Value::Null,
-        });
-        row.set("parent", match parent {
-            Some(p) => Value::String(p),
-            None => Value::Null,
-        });
+        row.set(
+            "shortcut",
+            match shortcut {
+                Some(s) if !s.is_empty() => Value::String(s),
+                _ => Value::Null,
+            },
+        );
+        row.set(
+            "parent",
+            match parent {
+                Some(p) => Value::String(p),
+                None => Value::Null,
+            },
+        );
         result.push(row);
     }
     Ok(result)
@@ -292,9 +356,7 @@ pub fn tags(conn: &Connection) -> Result<Vec<Row>, Error> {
 
 pub fn show(conn: &Connection, id: &str) -> Result<Row, Error> {
     // Try as task first
-    let sql = format!(
-        "{TASK_SELECT} WHERE t.uuid = ?1"
-    );
+    let sql = format!("{TASK_SELECT} WHERE t.uuid = ?1");
     let mut stmt = conn.prepare(&sql)?;
     let task = stmt.query_row([id], |row| {
         Ok((
@@ -311,39 +373,55 @@ pub fn show(conn: &Connection, id: &str) -> Result<Row, Error> {
 
     match task {
         Ok((uuid, title, proj, area, sd, dl, stop, status)) => {
-            let mut row = task_row(conn, &uuid, TaskData {
-                title, project_title: proj, area_title: area,
-                start_date: sd, deadline: dl, stop_date: stop, status,
-            })?;
+            let mut row = task_row(
+                conn,
+                &uuid,
+                TaskData {
+                    title,
+                    project_title: proj,
+                    area_title: area,
+                    start_date: sd,
+                    deadline: dl,
+                    stop_date: stop,
+                    status,
+                },
+            )?;
 
             // Add notes
-            let notes: Option<String> = conn.query_row(
-                "SELECT notes FROM TMTask WHERE uuid = ?1",
-                [id],
-                |r| r.get(0),
-            )?;
-            row.set("notes", match notes {
-                Some(n) if !n.is_empty() => Value::String(n),
-                _ => Value::Null,
-            });
+            let notes: Option<String> =
+                conn.query_row("SELECT notes FROM TMTask WHERE uuid = ?1", [id], |r| {
+                    r.get(0)
+                })?;
+            row.set(
+                "notes",
+                match notes {
+                    Some(n) if !n.is_empty() => Value::String(n),
+                    _ => Value::Null,
+                },
+            );
 
             // Add type
-            let task_type: i64 = conn.query_row(
-                "SELECT type FROM TMTask WHERE uuid = ?1",
-                [id],
-                |r| r.get(0),
-            )?;
-            row.set("type", Value::String(match task_type {
-                0 => "task",
-                1 => "project",
-                2 => "heading",
-                _ => "unknown",
-            }.to_string()));
+            let task_type: i64 =
+                conn.query_row("SELECT type FROM TMTask WHERE uuid = ?1", [id], |r| {
+                    r.get(0)
+                })?;
+            row.set(
+                "type",
+                Value::String(
+                    match task_type {
+                        0 => "task",
+                        1 => "project",
+                        2 => "heading",
+                        _ => "unknown",
+                    }
+                    .to_string(),
+                ),
+            );
 
             // Add checklist items
             let mut cl_stmt = conn.prepare(
                 "SELECT title, status FROM TMChecklistItem \
-                 WHERE task = ?1 ORDER BY \"index\""
+                 WHERE task = ?1 ORDER BY \"index\"",
             )?;
             let items: Vec<ChecklistItem> = cl_stmt
                 .query_map([id], |r| {
@@ -406,14 +484,35 @@ pub fn stats(conn: &Connection) -> Result<Vec<KeyValue>, Error> {
     let mut result = Vec::new();
 
     let counts = [
-        ("inbox", "SELECT COUNT(*) FROM TMTask WHERE start = 0 AND status = 0 AND trashed = 0 AND type = 0 AND project IS NULL AND area IS NULL"),
-        ("today", "SELECT COUNT(*) FROM TMTask WHERE start = 1 AND status = 0 AND trashed = 0 AND type = 0"),
-        ("upcoming", "SELECT COUNT(*) FROM TMTask WHERE startDate IS NOT NULL AND startDate > 0 AND status = 0 AND trashed = 0 AND type = 0"),
-        ("someday", "SELECT COUNT(*) FROM TMTask WHERE start = 2 AND status = 0 AND trashed = 0 AND type = 0"),
-        ("completed", "SELECT COUNT(*) FROM TMTask WHERE status = 3 AND trashed = 0"),
-        ("cancelled", "SELECT COUNT(*) FROM TMTask WHERE status = 2 AND trashed = 0"),
+        (
+            "inbox",
+            "SELECT COUNT(*) FROM TMTask WHERE start = 0 AND status = 0 AND trashed = 0 AND type = 0 AND project IS NULL AND area IS NULL",
+        ),
+        (
+            "today",
+            "SELECT COUNT(*) FROM TMTask WHERE start = 1 AND status = 0 AND trashed = 0 AND type = 0",
+        ),
+        (
+            "upcoming",
+            "SELECT COUNT(*) FROM TMTask WHERE startDate IS NOT NULL AND startDate > 0 AND status = 0 AND trashed = 0 AND type = 0",
+        ),
+        (
+            "someday",
+            "SELECT COUNT(*) FROM TMTask WHERE start = 2 AND status = 0 AND trashed = 0 AND type = 0",
+        ),
+        (
+            "completed",
+            "SELECT COUNT(*) FROM TMTask WHERE status = 3 AND trashed = 0",
+        ),
+        (
+            "cancelled",
+            "SELECT COUNT(*) FROM TMTask WHERE status = 2 AND trashed = 0",
+        ),
         ("trashed", "SELECT COUNT(*) FROM TMTask WHERE trashed = 1"),
-        ("projects", "SELECT COUNT(*) FROM TMTask WHERE type = 1 AND status = 0 AND trashed = 0"),
+        (
+            "projects",
+            "SELECT COUNT(*) FROM TMTask WHERE type = 1 AND status = 0 AND trashed = 0",
+        ),
         ("areas", "SELECT COUNT(*) FROM TMArea WHERE visible = 1"),
         ("tags", "SELECT COUNT(*) FROM TMTag"),
     ];
