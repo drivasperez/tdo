@@ -60,7 +60,10 @@ mod tests {
     #[test]
     fn test_decode_known_date() {
         // 132541952 = 2022-06-28 (verified against real Things data)
-        assert_eq!(decode_things_date(132541952), Some("2022-06-28".to_string()));
+        assert_eq!(
+            decode_things_date(132541952),
+            Some("2022-06-28".to_string())
+        );
     }
 
     #[test]

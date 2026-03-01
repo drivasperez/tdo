@@ -15,10 +15,7 @@ fn tdo(db_path: &str) -> Command {
 }
 
 fn run_tdo(db_path: &str, args: &[&str]) -> (String, String, bool) {
-    let output = tdo(db_path)
-        .args(args)
-        .output()
-        .expect("failed to run tdo");
+    let output = tdo(db_path).args(args).output().expect("failed to run tdo");
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     (stdout, stderr, output.status.success())
@@ -36,7 +33,11 @@ fn test_inbox_tsv() {
     assert_eq!(lines[0], "id\ttitle\ttags\tdeadline");
     // Fixture has 1 inbox task: "Inbox task"
     assert!(lines.len() >= 2, "expected at least header + 1 row");
-    assert!(lines[1].contains("Inbox task"), "expected inbox task, got: {}", lines[1]);
+    assert!(
+        lines[1].contains("Inbox task"),
+        "expected inbox task, got: {}",
+        lines[1]
+    );
 }
 
 // r[verify cmd.inbox] r[verify output.json]
@@ -220,7 +221,10 @@ fn test_show_not_found() {
     let db = fixtures::create_fixture_db();
     let (_, stderr, ok) = run_tdo(db.path(), &["show", "nonexistent-id"]);
     assert!(!ok);
-    assert!(stderr.contains("not found"), "expected 'not found' in: {stderr}");
+    assert!(
+        stderr.contains("not found"),
+        "expected 'not found' in: {stderr}"
+    );
 }
 
 // ── Search ──
@@ -270,7 +274,10 @@ fn test_no_header() {
     assert!(ok);
     // First line should NOT be the header
     let first_line = out.lines().next().unwrap_or("");
-    assert!(!first_line.starts_with("id\t"), "header should be suppressed");
+    assert!(
+        !first_line.starts_with("id\t"),
+        "header should be suppressed"
+    );
 }
 
 // r[verify output.tsv.fields]
@@ -302,8 +309,10 @@ fn test_missing_auth_token() {
         .expect("failed to run tdo");
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Auth token") || stderr.contains("auth"),
-        "expected auth error in: {stderr}");
+    assert!(
+        stderr.contains("Auth token") || stderr.contains("auth"),
+        "expected auth error in: {stderr}"
+    );
 }
 
 // ── Tags field resolution ──
@@ -317,7 +326,10 @@ fn test_tags_field_resolution() {
     let parsed: serde_json::Value = serde_json::from_str(&out).expect("invalid JSON");
     let arr = parsed.as_array().unwrap();
     let tagged = arr.iter().find(|item| item["title"] == "Today tagged task");
-    assert!(tagged.is_some(), "expected 'Today tagged task' in today view");
+    assert!(
+        tagged.is_some(),
+        "expected 'Today tagged task' in today view"
+    );
     assert_eq!(tagged.unwrap()["tags"], "urgent");
 }
 
@@ -331,7 +343,9 @@ fn test_project_field_resolution() {
     assert!(ok);
     let parsed: serde_json::Value = serde_json::from_str(&out).expect("invalid JSON");
     let arr = parsed.as_array().unwrap();
-    let in_project = arr.iter().find(|item| item["title"] == "Today project task");
+    let in_project = arr
+        .iter()
+        .find(|item| item["title"] == "Today project task");
     assert!(in_project.is_some(), "expected 'Today project task'");
     assert_eq!(in_project.unwrap()["project"], "Test Project");
 }
@@ -368,7 +382,10 @@ fn test_fields_dates() {
     assert!(ok);
     let parsed: serde_json::Value = serde_json::from_str(&out).expect("invalid JSON");
     let arr = parsed.as_array().unwrap();
-    let task = arr.iter().find(|item| item["title"] == "Upcoming task").unwrap();
+    let task = arr
+        .iter()
+        .find(|item| item["title"] == "Upcoming task")
+        .unwrap();
     assert_eq!(task["startDate"], "2025-12-15");
 }
 
@@ -380,7 +397,10 @@ fn test_fields_area() {
     assert!(ok);
     let parsed: serde_json::Value = serde_json::from_str(&out).expect("invalid JSON");
     let arr = parsed.as_array().unwrap();
-    let proj = arr.iter().find(|item| item["title"] == "Test Project").unwrap();
+    let proj = arr
+        .iter()
+        .find(|item| item["title"] == "Test Project")
+        .unwrap();
     assert_eq!(proj["area"], "Work");
 }
 
@@ -444,6 +464,107 @@ fn test_move_requires_auth() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Auth token") || stderr.contains("auth"));
+}
+
+// ── Help text ──
+
+// r[verify help.about]
+#[test]
+fn test_help_about() {
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .arg("--help")
+        .output()
+        .expect("failed to run tdo");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Must mention Things 3
+    assert!(stdout.contains("Things 3"), "help should mention Things 3");
+    // Must describe the workflow
+    assert!(
+        stdout.contains("workflow") || stdout.contains("Typical workflow"),
+        "help should describe the agent workflow"
+    );
+    // Must mention tdo guide
+    assert!(
+        stdout.contains("tdo guide"),
+        "help should point to tdo guide"
+    );
+}
+
+// r[verify help.subcommands]
+#[test]
+fn test_help_subcommands() {
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .args(["today", "--help"])
+        .output()
+        .expect("failed to run tdo");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Subcommand help must explain what the view means
+    assert!(
+        stdout.contains("scheduled for today"),
+        "today help should explain the view: {stdout}"
+    );
+    // Must include default columns
+    assert!(
+        stdout.contains("id, title, project, tags, deadline"),
+        "today help should list default columns: {stdout}"
+    );
+}
+
+// ── Guide ──
+
+// r[verify cmd.guide]
+#[test]
+fn test_guide_prints_markdown() {
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .arg("guide")
+        .output()
+        .expect("failed to run tdo");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Must be a markdown document with key sections
+    assert!(
+        stdout.starts_with("# tdo"),
+        "guide should start with a markdown heading"
+    );
+    assert!(
+        stdout.contains("## Typical workflow"),
+        "guide should have workflow section"
+    );
+    assert!(
+        stdout.contains("## Available fields"),
+        "guide should have fields section"
+    );
+    assert!(
+        stdout.contains("## Read commands"),
+        "guide should have read commands section"
+    );
+    assert!(
+        stdout.contains("## Write commands"),
+        "guide should have write commands section"
+    );
+}
+
+// r[verify cmd.guide.output]
+#[test]
+fn test_guide_ignores_json_flag() {
+    // Guide output is plain markdown regardless of --json flag
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .args(["--json", "guide"])
+        .output()
+        .expect("failed to run tdo");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.starts_with("# tdo"),
+        "guide should output markdown even with --json"
+    );
+    // Verify it's NOT valid JSON
+    assert!(
+        serde_json::from_str::<serde_json::Value>(&stdout).is_err(),
+        "guide output should not be JSON"
+    );
 }
 
 // r[verify error.db-locked]

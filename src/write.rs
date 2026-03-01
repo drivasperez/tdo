@@ -18,16 +18,14 @@ pub struct MacOsUrlOpener;
 
 impl UrlOpener for MacOsUrlOpener {
     fn open(&self, url: &str) -> Result<String, Error> {
-        let output = std::process::Command::new("open")
-            .arg(url)
-            .output()?;
+        let output = std::process::Command::new("open").arg(url).output()?;
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(Error::Io(std::io::Error::other(
-                format!("Failed to open URL: {stderr}"),
-            )))
+            Err(Error::Io(std::io::Error::other(format!(
+                "Failed to open URL: {stderr}"
+            ))))
         }
     }
 }
@@ -180,8 +178,13 @@ mod tests {
     fn test_build_add_url_simple() {
         let url = build_add_url(&AddParams {
             title: "Buy milk",
-            notes: None, when: None, deadline: None, tags: None,
-            list: None, heading: None, checklist_items: &[],
+            notes: None,
+            when: None,
+            deadline: None,
+            tags: None,
+            list: None,
+            heading: None,
+            checklist_items: &[],
         });
         assert_eq!(url, "things:///add?title=Buy%20milk");
     }
@@ -212,13 +215,19 @@ mod tests {
     #[test]
     fn test_build_complete_url() {
         let url = build_complete_url("abc-123", "token123");
-        assert_eq!(url, "things:///update?id=abc-123&completed=true&auth-token=token123");
+        assert_eq!(
+            url,
+            "things:///update?id=abc-123&completed=true&auth-token=token123"
+        );
     }
 
     #[test]
     fn test_build_cancel_url() {
         let url = build_cancel_url("abc-123", "token123");
-        assert_eq!(url, "things:///update?id=abc-123&canceled=true&auth-token=token123");
+        assert_eq!(
+            url,
+            "things:///update?id=abc-123&canceled=true&auth-token=token123"
+        );
     }
 
     #[test]

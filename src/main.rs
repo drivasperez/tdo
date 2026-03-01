@@ -11,8 +11,20 @@ use error::Error;
 use output::{Header, TsvConfig};
 use write::{AddParams, MacOsUrlOpener, UpdateParams, UrlOpener};
 
+// r[help.about]
 #[derive(Parser)]
-#[command(name = "tdo", about = "Things 3 CLI — machine-friendly interface")]
+#[command(
+    name = "tdo",
+    about = "Things 3 CLI — machine-friendly interface for querying and writing to the Things 3 todo app on macOS",
+    long_about = "Things 3 CLI — machine-friendly interface for querying and writing to the Things 3 todo app on macOS.\n\n\
+        Things 3 organizes tasks into views: Inbox, Today, Upcoming, Anytime, Someday, and Logbook.\n\
+        Tasks belong to Projects, which belong to Areas. Tasks can have tags, deadlines, and checklist items.\n\n\
+        Typical workflow:\n  \
+          1. List tasks (e.g. `tdo today`, `tdo inbox`) to see items and their UUIDs\n  \
+          2. Inspect a specific item with `tdo show <uuid>`\n  \
+          3. Modify items with `tdo complete <uuid>`, `tdo update <uuid>`, etc.\n\n\
+        Output is TSV by default (use --json for JSON). Use `tdo guide` for a comprehensive reference."
+)]
 struct Cli {
     /// Override the default database path
     // r[global.db-path]
@@ -45,7 +57,11 @@ struct Cli {
 
 impl Cli {
     fn header(&self) -> Header {
-        if self.no_header { Header::Hide } else { Header::Show }
+        if self.no_header {
+            Header::Hide
+        } else {
+            Header::Show
+        }
     }
 
     fn tsv_config<'a>(&'a self, default_fields: &'a [&'a str]) -> TsvConfig<'a> {
@@ -57,43 +73,58 @@ impl Cli {
     }
 }
 
+// r[help.subcommands]
 #[derive(Subcommand)]
 enum Command {
-    /// List inbox items
+    /// List inbox items (unprocessed tasks not yet assigned to a project or scheduled).
+    /// Default columns: id, title, tags, deadline
     Inbox,
-    /// List today items
+    /// List today items (tasks scheduled for today).
+    /// Default columns: id, title, project, tags, deadline
     Today,
-    /// List upcoming items
+    /// List upcoming items (tasks with a future start date, ordered by date).
+    /// Default columns: id, title, project, tags, startDate, deadline
     Upcoming,
-    /// List anytime items
+    /// List anytime items (started tasks not in Today — available to work on).
+    /// Default columns: id, title, project, area, tags, deadline
     Anytime,
-    /// List someday items
+    /// List someday items (deferred tasks to revisit later).
+    /// Default columns: id, title, project, tags
     Someday,
-    /// List completed items
+    /// List completed items from the logbook, most recent first.
+    /// Default columns: id, title, project, completedDate
     Logbook {
-        /// Maximum number of items to show
+        /// Maximum number of items to show (default: 50)
         #[arg(long, default_value = "50")]
         limit: u32,
     },
-    /// List open projects
+    /// List open projects (containers that group related tasks).
+    /// Default columns: id, title, area, tags, deadline, openTasks
     Projects,
-    /// List areas
+    /// List areas (high-level categories like "Work" or "Personal" that group projects).
+    /// Default columns: id, title
     Areas,
-    /// List tags
+    /// List all tags.
+    /// Default columns: id, title, shortcut, parent
     Tags,
-    /// Show full details of an item
+    /// Show full details of a single item by UUID (includes notes, checklist, tags).
+    /// In TSV mode: key-value pairs. In JSON mode: single object with nested arrays
     Show {
-        /// Item UUID
+        /// Item UUID (get UUIDs from list commands like `tdo today`)
         id: String,
     },
-    /// Search tasks by title/notes
+    /// Search tasks and projects by title or notes (case-insensitive substring match).
+    /// Default columns: id, title, project, status, tags
     Search {
-        /// Search query
+        /// Search query (matched case-insensitively against title and notes)
         query: String,
     },
-    /// Show database statistics
+    /// Show database statistics (counts of items by status, projects, areas, tags)
     Stats,
-    /// Add a new todo
+    // r[cmd.guide] r[cmd.guide.output]
+    /// Print a comprehensive markdown guide for AI agents and scripting
+    Guide,
+    /// Add a new todo via the Things URL scheme (opens Things briefly).
     Add {
         /// Todo title
         title: String,
@@ -119,17 +150,17 @@ enum Command {
         #[arg(long = "checklist-item")]
         checklist_items: Vec<String>,
     },
-    /// Mark an item as completed
+    /// Mark an item as completed (requires --auth-token or TDO_AUTH_TOKEN)
     Complete {
-        /// Item UUID
+        /// Item UUID (get UUIDs from list commands like `tdo today`)
         id: String,
     },
-    /// Mark an item as cancelled
+    /// Mark an item as cancelled (requires --auth-token or TDO_AUTH_TOKEN)
     Cancel {
-        /// Item UUID
+        /// Item UUID (get UUIDs from list commands like `tdo today`)
         id: String,
     },
-    /// Update an existing item
+    /// Update an existing item's title, notes, dates, or tags (requires auth token)
     Update {
         /// Item UUID
         id: String,
@@ -175,10 +206,24 @@ fn run() -> Result<(), Error> {
     let cli = Cli::parse();
 
     match &cli.command {
+        // Guide command — no DB or URL scheme needed
+        Command::Guide => {
+            print!("{}", include_str!("../docs/guide.md"));
+            Ok(())
+        }
         // Read commands need DB access
-        Command::Inbox | Command::Today | Command::Upcoming | Command::Anytime
-        | Command::Someday | Command::Logbook { .. } | Command::Projects | Command::Areas
-        | Command::Tags | Command::Show { .. } | Command::Search { .. } | Command::Stats => {
+        Command::Inbox
+        | Command::Today
+        | Command::Upcoming
+        | Command::Anytime
+        | Command::Someday
+        | Command::Logbook { .. }
+        | Command::Projects
+        | Command::Areas
+        | Command::Tags
+        | Command::Show { .. }
+        | Command::Search { .. }
+        | Command::Stats => {
             let db_path = match &cli.db_path {
                 Some(p) => p.clone(),
                 None => db::find_db_path()?,
@@ -187,10 +232,11 @@ fn run() -> Result<(), Error> {
             run_read_command(&cli, &conn)
         }
         // Write commands use URL scheme
-        Command::Add { .. } | Command::Complete { .. } | Command::Cancel { .. }
-        | Command::Update { .. } | Command::Move { .. } => {
-            run_write_command(&cli, &MacOsUrlOpener)
-        }
+        Command::Add { .. }
+        | Command::Complete { .. }
+        | Command::Cancel { .. }
+        | Command::Update { .. }
+        | Command::Move { .. } => run_write_command(&cli, &MacOsUrlOpener),
     }
 }
 
@@ -209,7 +255,10 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
             if cli.json {
                 output::print_json(&rows)?;
             } else {
-                output::print_tsv(&rows, &cli.tsv_config(&["id", "title", "project", "tags", "deadline"]))?;
+                output::print_tsv(
+                    &rows,
+                    &cli.tsv_config(&["id", "title", "project", "tags", "deadline"]),
+                )?;
             }
         }
         Command::Upcoming => {
@@ -217,7 +266,10 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
             if cli.json {
                 output::print_json(&rows)?;
             } else {
-                output::print_tsv(&rows, &cli.tsv_config(&["id", "title", "project", "tags", "startDate", "deadline"]))?;
+                output::print_tsv(
+                    &rows,
+                    &cli.tsv_config(&["id", "title", "project", "tags", "startDate", "deadline"]),
+                )?;
             }
         }
         Command::Anytime => {
@@ -225,7 +277,10 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
             if cli.json {
                 output::print_json(&rows)?;
             } else {
-                output::print_tsv(&rows, &cli.tsv_config(&["id", "title", "project", "area", "tags", "deadline"]))?;
+                output::print_tsv(
+                    &rows,
+                    &cli.tsv_config(&["id", "title", "project", "area", "tags", "deadline"]),
+                )?;
             }
         }
         Command::Someday => {
@@ -241,7 +296,10 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
             if cli.json {
                 output::print_json(&rows)?;
             } else {
-                output::print_tsv(&rows, &cli.tsv_config(&["id", "title", "project", "completedDate"]))?;
+                output::print_tsv(
+                    &rows,
+                    &cli.tsv_config(&["id", "title", "project", "completedDate"]),
+                )?;
             }
         }
         Command::Projects => {
@@ -249,7 +307,10 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
             if cli.json {
                 output::print_json(&rows)?;
             } else {
-                output::print_tsv(&rows, &cli.tsv_config(&["id", "title", "area", "tags", "deadline", "openTasks"]))?;
+                output::print_tsv(
+                    &rows,
+                    &cli.tsv_config(&["id", "title", "area", "tags", "deadline", "openTasks"]),
+                )?;
             }
         }
         Command::Areas => {
@@ -265,7 +326,10 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
             if cli.json {
                 output::print_json(&rows)?;
             } else {
-                output::print_tsv(&rows, &cli.tsv_config(&["id", "title", "shortcut", "parent"]))?;
+                output::print_tsv(
+                    &rows,
+                    &cli.tsv_config(&["id", "title", "shortcut", "parent"]),
+                )?;
             }
         }
         Command::Show { id } => {
@@ -281,7 +345,10 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
             if cli.json {
                 output::print_json(&rows)?;
             } else {
-                output::print_tsv(&rows, &cli.tsv_config(&["id", "title", "project", "status", "tags"]))?;
+                output::print_tsv(
+                    &rows,
+                    &cli.tsv_config(&["id", "title", "project", "status", "tags"]),
+                )?;
             }
         }
         Command::Stats => {
@@ -300,7 +367,14 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
 fn run_write_command(cli: &Cli, opener: &dyn UrlOpener) -> Result<(), Error> {
     match &cli.command {
         Command::Add {
-            title, notes, when, deadline, tags, list, heading, checklist_items,
+            title,
+            notes,
+            when,
+            deadline,
+            tags,
+            list,
+            heading,
+            checklist_items,
         } => {
             let url = write::build_add_url(&AddParams {
                 title,
@@ -329,8 +403,16 @@ fn run_write_command(cli: &Cli, opener: &dyn UrlOpener) -> Result<(), Error> {
             println!("Cancelled: {id}");
         }
         Command::Update {
-            id, title, notes, append_notes, prepend_notes,
-            when, deadline, add_tags, list, heading,
+            id,
+            title,
+            notes,
+            append_notes,
+            prepend_notes,
+            when,
+            deadline,
+            add_tags,
+            list,
+            heading,
         } => {
             let token = require_auth_token(cli)?;
             let url = write::build_update_url(&UpdateParams {

@@ -2,6 +2,17 @@
 
 A machine-friendly command-line interface for interacting with the Things 3 todo app on macOS. Designed primarily as a tool for AI agents and shell scripting, with human-readable output available when needed.
 
+## Help text
+
+r[help.about]
+The top-level `--help` must include a brief description of Things 3 and the typical agent workflow:
+list tasks to get UUIDs, then use UUIDs with show/complete/update/cancel.
+Run `tdo guide` for a comprehensive reference.
+
+r[help.subcommands]
+Each subcommand's help text must describe what the command does in enough detail for an
+AI agent unfamiliar with Things 3 to understand it, including the default output columns.
+
 ## Data access
 
 r[data.read]
@@ -145,6 +156,16 @@ Prints a summary of the Things database: counts of items by status, projects, ar
 
 r[cmd.stats.output]
 In TSV mode, outputs key-value pairs. In JSON mode, a single summary object.
+
+### tdo guide
+
+r[cmd.guide]
+Prints a detailed markdown guide explaining Things 3 concepts, the tdo workflow,
+all subcommands with examples, available fields, output format details, and
+common patterns. Designed to be consumed by AI agents as a reference document.
+
+r[cmd.guide.output]
+Output is always plain markdown text (not TSV/JSON). The `--json` and `--fields` flags have no effect.
 
 ## Write subcommands
 

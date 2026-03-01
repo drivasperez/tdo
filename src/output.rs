@@ -8,7 +8,10 @@ use crate::error::Error;
 use crate::model::{KeyValue, Row};
 
 /// Whether to print the TSV header row.
-pub enum Header { Show, Hide }
+pub enum Header {
+    Show,
+    Hide,
+}
 
 /// Bundled parameters for `print_tsv`.
 pub struct TsvConfig<'a> {

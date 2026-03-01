@@ -38,7 +38,11 @@ impl fmt::Display for Error {
             Error::Sqlite(e) => write!(f, "Database error: {e}"),
             Error::Io(e) => write!(f, "IO error: {e}"),
             Error::Json(e) => write!(f, "JSON error: {e}"),
-            Error::NotFound(id) => write!(f, "Item not found: {id}"),
+            Error::NotFound(id) => write!(
+                f,
+                "Item not found: {id}\n\
+                 Hint: use `tdo search <query>` to find items and their UUIDs."
+            ),
         }
     }
 }
