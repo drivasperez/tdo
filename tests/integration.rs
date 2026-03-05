@@ -484,10 +484,10 @@ fn test_help_about() {
         stdout.contains("workflow") || stdout.contains("Typical workflow"),
         "help should describe the agent workflow"
     );
-    // Must mention tdo guide
+    // Must mention tdo skill
     assert!(
-        stdout.contains("tdo guide"),
-        "help should point to tdo guide"
+        stdout.contains("tdo skill"),
+        "help should point to tdo skill"
     );
 }
 
@@ -512,59 +512,191 @@ fn test_help_subcommands() {
     );
 }
 
-// ── Guide ──
+// ── Skill ──
 
-// r[verify cmd.guide]
+// r[verify cmd.skill.show]
 #[test]
-fn test_guide_prints_markdown() {
+fn test_skill_show_prints_markdown() {
     let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
-        .arg("guide")
+        .args(["skill", "--show"])
         .output()
         .expect("failed to run tdo");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Must be a markdown document with key sections
     assert!(
         stdout.starts_with("# tdo"),
-        "guide should start with a markdown heading"
+        "skill --show should start with a markdown heading"
     );
     assert!(
         stdout.contains("## Typical workflow"),
-        "guide should have workflow section"
+        "skill --show should have workflow section"
     );
     assert!(
         stdout.contains("## Available fields"),
-        "guide should have fields section"
+        "skill --show should have fields section"
     );
     assert!(
         stdout.contains("## Read commands"),
-        "guide should have read commands section"
+        "skill --show should have read commands section"
     );
     assert!(
         stdout.contains("## Write commands"),
-        "guide should have write commands section"
+        "skill --show should have write commands section"
     );
 }
 
-// r[verify cmd.guide.output]
+// r[verify cmd.skill.show]
 #[test]
-fn test_guide_ignores_json_flag() {
-    // Guide output is plain markdown regardless of --json flag
+fn test_skill_show_ignores_json_flag() {
     let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
-        .args(["--json", "guide"])
+        .args(["--json", "skill", "--show"])
         .output()
         .expect("failed to run tdo");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.starts_with("# tdo"),
-        "guide should output markdown even with --json"
+        "skill --show should output markdown even with --json"
     );
-    // Verify it's NOT valid JSON
     assert!(
         serde_json::from_str::<serde_json::Value>(&stdout).is_err(),
-        "guide output should not be JSON"
+        "skill --show output should not be JSON"
     );
+}
+
+// r[verify cmd.skill.skip-existing]
+#[test]
+fn test_skill_skips_already_installed() {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let claude_skills = tmp.path().join(".claude/skills/tdo");
+    std::fs::create_dir_all(&claude_skills).unwrap();
+    let skill_path = claude_skills.join("SKILL.md");
+    // Write the current guide content
+    let guide = include_str!("../docs/guide.md");
+    std::fs::write(&skill_path, guide).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .args(["skill", "--claude"])
+        .env("HOME", tmp.path())
+        .output()
+        .expect("failed to run tdo");
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("already installed"),
+        "should report already installed: {stderr}"
+    );
+}
+
+// r[verify cmd.skill] r[verify cmd.skill.confirm]
+#[test]
+fn test_skill_aborts_on_no() {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .args(["skill", "--claude"])
+        .env("HOME", tmp.path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            if let Some(ref mut stdin) = child.stdin {
+                stdin.write_all(b"n\n").ok();
+            }
+            child.wait_with_output()
+        })
+        .expect("failed to run tdo");
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Aborted"),
+        "should abort when user says no: {stderr}"
+    );
+    // File should not exist
+    assert!(!tmp.path().join(".claude/skills/tdo/SKILL.md").exists());
+}
+
+// r[verify cmd.skill.claude]
+#[test]
+fn test_skill_installs_claude_only() {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .args(["skill", "--claude"])
+        .env("HOME", tmp.path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            if let Some(ref mut stdin) = child.stdin {
+                stdin.write_all(b"y\n").ok();
+            }
+            child.wait_with_output()
+        })
+        .expect("failed to run tdo");
+
+    assert!(output.status.success());
+    assert!(tmp.path().join(".claude/skills/tdo/SKILL.md").exists());
+    assert!(!tmp.path().join(".agents/skills/tdo/SKILL.md").exists());
+    let content = std::fs::read_to_string(tmp.path().join(".claude/skills/tdo/SKILL.md")).unwrap();
+    assert!(content.starts_with("# tdo"));
+}
+
+// r[verify cmd.skill.codex]
+#[test]
+fn test_skill_installs_codex_only() {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .args(["skill", "--codex"])
+        .env("HOME", tmp.path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            if let Some(ref mut stdin) = child.stdin {
+                stdin.write_all(b"y\n").ok();
+            }
+            child.wait_with_output()
+        })
+        .expect("failed to run tdo");
+
+    assert!(output.status.success());
+    assert!(!tmp.path().join(".claude/skills/tdo/SKILL.md").exists());
+    assert!(tmp.path().join(".agents/skills/tdo/SKILL.md").exists());
+}
+
+// r[verify cmd.skill]
+#[test]
+fn test_skill_installs_both_by_default() {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .args(["skill"])
+        .env("HOME", tmp.path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            if let Some(ref mut stdin) = child.stdin {
+                stdin.write_all(b"y\n").ok();
+            }
+            child.wait_with_output()
+        })
+        .expect("failed to run tdo");
+
+    assert!(output.status.success());
+    assert!(tmp.path().join(".claude/skills/tdo/SKILL.md").exists());
+    assert!(tmp.path().join(".agents/skills/tdo/SKILL.md").exists());
 }
 
 // ── Project subcommands ──

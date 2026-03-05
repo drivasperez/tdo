@@ -23,7 +23,7 @@ use write::{AddParams, AddProjectParams, MacOsUrlOpener, UpdateParams, UrlOpener
           1. List tasks (e.g. `tdo today`, `tdo inbox`) to see items and their UUIDs\n  \
           2. Inspect a specific item with `tdo show <uuid>`\n  \
           3. Modify items with `tdo complete <uuid>`, `tdo update <uuid>`, etc.\n\n\
-        Output is TSV by default (use --json for JSON). Use `tdo guide` for a comprehensive reference."
+        Output is TSV by default (use --json for JSON). Use `tdo skill --show` for a comprehensive reference, or `tdo skill` to install the guide as an AI agent skill."
 )]
 struct Cli {
     /// Override the default database path
@@ -121,9 +121,20 @@ enum Command {
     },
     /// Show database statistics (counts of items by status, projects, areas, tags)
     Stats,
-    // r[cmd.guide] r[cmd.guide.output]
-    /// Print a comprehensive markdown guide for AI agents and scripting
-    Guide,
+    // r[cmd.skill] r[cmd.skill.claude] r[cmd.skill.codex] r[cmd.skill.show]
+    // r[cmd.skill.confirm] r[cmd.skill.skip-existing]
+    /// Install the tdo guide as an AI agent skill, or print it with --show
+    Skill {
+        /// Only install to ~/.claude/skills/ (Claude Code)
+        #[arg(long)]
+        claude: bool,
+        /// Only install to ~/.agents/skills/ (Codex)
+        #[arg(long)]
+        codex: bool,
+        /// Print the guide to stdout instead of installing
+        #[arg(long)]
+        show: bool,
+    },
     /// Add a new todo via the Things URL scheme (opens Things briefly).
     Add {
         /// Todo title
@@ -245,11 +256,12 @@ fn run() -> Result<(), Error> {
     let cli = Cli::parse();
 
     match &cli.command {
-        // Guide command — no DB or URL scheme needed
-        Command::Guide => {
-            print!("{}", include_str!("../docs/guide.md"));
-            Ok(())
-        }
+        // Skill command — no DB or URL scheme needed
+        Command::Skill {
+            claude,
+            codex,
+            show,
+        } => run_skill(*claude, *codex, *show),
         // Read commands need DB access
         Command::Inbox
         | Command::Today
@@ -289,6 +301,104 @@ fn run() -> Result<(), Error> {
             ProjectCommand::Add { .. } => run_write_command(&cli, &MacOsUrlOpener),
         },
     }
+}
+
+const GUIDE_CONTENT: &str = include_str!("../docs/guide.md");
+const SKILL_DIR: &str = "tdo";
+const SKILL_FILENAME: &str = "SKILL.md";
+
+enum SkillTarget {
+    Claude,
+    Codex,
+    Both,
+}
+
+fn skill_paths(target: &SkillTarget) -> Vec<std::path::PathBuf> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| String::from("~"));
+    let claude = std::path::PathBuf::from(&home)
+        .join(".claude/skills")
+        .join(SKILL_DIR)
+        .join(SKILL_FILENAME);
+    let codex = std::path::PathBuf::from(&home)
+        .join(".agents/skills")
+        .join(SKILL_DIR)
+        .join(SKILL_FILENAME);
+    match target {
+        SkillTarget::Claude => vec![claude],
+        SkillTarget::Codex => vec![codex],
+        SkillTarget::Both => vec![claude, codex],
+    }
+}
+
+// ANSI escape helpers
+const BOLD: &str = "\x1b[1m";
+const DIM: &str = "\x1b[2m";
+const RESET: &str = "\x1b[0m";
+const CYAN: &str = "\x1b[36m";
+const GREEN: &str = "\x1b[32m";
+const YELLOW: &str = "\x1b[33m";
+const RED: &str = "\x1b[31m";
+
+fn run_skill(claude: bool, codex: bool, show: bool) -> Result<(), Error> {
+    if show {
+        print!("{}", GUIDE_CONTENT);
+        return Ok(());
+    }
+
+    let target = match (claude, codex) {
+        (true, false) => SkillTarget::Claude,
+        (false, true) => SkillTarget::Codex,
+        _ => SkillTarget::Both,
+    };
+
+    let paths = skill_paths(&target);
+
+    // Check which paths actually need installing
+    let mut to_install: Vec<&std::path::PathBuf> = Vec::new();
+    for path in &paths {
+        if path.exists() && std::fs::read_to_string(path).unwrap_or_default() == GUIDE_CONTENT {
+            eprintln!(
+                "  {DIM}\u{2500}\u{2500}{RESET} {CYAN}{}{RESET} {DIM}\u{2014} already installed{RESET}",
+                path.display()
+            );
+        } else {
+            to_install.push(path);
+        }
+    }
+
+    if to_install.is_empty() {
+        eprintln!("\n  {GREEN}\u{2713}{RESET} Nothing to do.");
+        return Ok(());
+    }
+
+    // Prompt for confirmation
+    eprintln!("\n  {BOLD}tdo{RESET} {DIM}\u{00b7}{RESET} skill installer\n");
+    for path in &to_install {
+        eprintln!("  {YELLOW}\u{25b8}{RESET} {CYAN}{}{RESET}", path.display());
+    }
+    eprintln!();
+    eprint!("  {BOLD}Install?{RESET} {DIM}[y/N]{RESET} ");
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    if !answer.trim().eq_ignore_ascii_case("y") {
+        eprintln!("\n  {RED}\u{00d7}{RESET} Aborted.");
+        return Ok(());
+    }
+
+    eprintln!();
+    for path in &to_install {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, GUIDE_CONTENT)?;
+        eprintln!(
+            "  {GREEN}\u{2500}\u{2500}{RESET} {CYAN}{}{RESET} {GREEN}\u{2713}{RESET}",
+            path.display()
+        );
+    }
+    eprintln!("\n  {GREEN}{BOLD}\u{2234}{RESET} Done.\n");
+
+    Ok(())
 }
 
 fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error> {
