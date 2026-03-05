@@ -7,7 +7,7 @@ A machine-friendly command-line interface for interacting with the Things 3 todo
 r[help.about]
 The top-level `--help` must include a brief description of Things 3 and the typical agent workflow:
 list tasks to get UUIDs, then use UUIDs with show/complete/update/cancel.
-Run `tdo guide` for a comprehensive reference.
+Run `tdo skill --show` for a comprehensive reference, or `tdo skill` to install the guide as an AI agent skill.
 
 r[help.subcommands]
 Each subcommand's help text must describe what the command does in enough detail for an
@@ -157,15 +157,31 @@ Prints a summary of the Things database: counts of items by status, projects, ar
 r[cmd.stats.output]
 In TSV mode, outputs key-value pairs. In JSON mode, a single summary object.
 
-### tdo guide
+### tdo skill
 
-r[cmd.guide]
-Prints a detailed markdown guide explaining Things 3 concepts, the tdo workflow,
-all subcommands with examples, available fields, output format details, and
-common patterns. Designed to be consumed by AI agents as a reference document.
+r[cmd.skill]
+Installs the tdo guide as an AI agent skill file. By default, installs to both
+`~/.claude/skills/tdo/SKILL.md` (for Claude Code) and `~/.agents/skills/tdo/SKILL.md` (for Codex).
 
-r[cmd.guide.output]
-Output is always plain markdown text (not TSV/JSON). The `--json` and `--fields` flags have no effect.
+r[cmd.skill.claude]
+When `--claude` is passed, installs only to `~/.claude/skills/tdo/SKILL.md`.
+
+r[cmd.skill.codex]
+When `--codex` is passed, installs only to `~/.agents/skills/tdo/SKILL.md`.
+
+r[cmd.skill.show]
+When `--show` is passed, prints the guide to stdout instead of installing.
+Output is always plain markdown text (not TSV/JSON). The `--json` and `--fields`
+flags have no effect.
+
+r[cmd.skill.confirm]
+Before installing, prompts the user with a y/n confirmation showing the
+target path(s). Exits without installing if the user declines.
+
+r[cmd.skill.skip-existing]
+If the skill file already exists at a target path and its content matches the
+current guide, skips that path and prints a message indicating it is already
+installed. If all targets are already installed, exits without prompting.
 
 ## Write subcommands
 
