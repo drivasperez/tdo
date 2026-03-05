@@ -1,6 +1,7 @@
 // r[data.write]
 // r[data.write.auth]
 // r[cmd.add] r[cmd.add.params] r[cmd.add.output]
+// r[cmd.project.add] r[cmd.project.add.params] r[cmd.project.add.output]
 // r[cmd.complete]
 // r[cmd.cancel]
 // r[cmd.update] r[cmd.update.params]
@@ -100,6 +101,50 @@ pub fn build_add_url(params: &AddParams) -> String {
     }
 
     format!("things:///add?{}", parts.join("&"))
+}
+
+/// Parameters for adding a new project.
+pub struct AddProjectParams<'a> {
+    pub title: &'a str,
+    pub notes: Option<&'a str>,
+    pub when: Option<&'a str>,
+    pub deadline: Option<&'a str>,
+    pub tags: Option<&'a str>,
+    pub area: Option<&'a str>,
+    pub todos: &'a [String],
+}
+
+/// Build a Things URL for adding a new project.
+pub fn build_add_project_url(params: &AddProjectParams) -> String {
+    let mut parts = vec![format!("title={}", url_encode(params.title))];
+
+    if let Some(n) = params.notes {
+        parts.push(format!("notes={}", url_encode(n)));
+    }
+    if let Some(w) = params.when {
+        parts.push(format!("when={}", url_encode(w)));
+    }
+    if let Some(d) = params.deadline {
+        parts.push(format!("deadline={}", url_encode(d)));
+    }
+    if let Some(t) = params.tags {
+        parts.push(format!("tags={}", url_encode(t)));
+    }
+    if let Some(a) = params.area {
+        parts.push(format!("area={}", url_encode(a)));
+    }
+    if !params.todos.is_empty() {
+        // Things URL scheme expects to-dos as a JSON array of strings or objects
+        let json_todos: Vec<String> = params
+            .todos
+            .iter()
+            .map(|t| serde_json::json!({"title": t}).to_string())
+            .collect();
+        let json_arr = format!("[{}]", json_todos.join(","));
+        parts.push(format!("to-dos={}", url_encode(&json_arr)));
+    }
+
+    format!("things:///add-project?{}", parts.join("&"))
 }
 
 /// Build a Things URL for completing an item.
@@ -250,6 +295,41 @@ mod tests {
         assert!(url.contains("title=New%20title"));
         assert!(url.contains("when=tomorrow"));
         assert!(url.contains("add-tags=urgent"));
+    }
+
+    #[test]
+    fn test_build_add_project_url_simple() {
+        let url = build_add_project_url(&AddProjectParams {
+            title: "My Project",
+            notes: None,
+            when: None,
+            deadline: None,
+            tags: None,
+            area: None,
+            todos: &[],
+        });
+        assert_eq!(url, "things:///add-project?title=My%20Project");
+    }
+
+    #[test]
+    fn test_build_add_project_url_full() {
+        let url = build_add_project_url(&AddProjectParams {
+            title: "Sprint 13",
+            notes: Some("Sprint notes"),
+            when: Some("today"),
+            deadline: Some("2025-07-01"),
+            tags: Some("work,sprint"),
+            area: Some("Work"),
+            todos: &["Task 1".to_string(), "Task 2".to_string()],
+        });
+        assert!(url.starts_with("things:///add-project?"));
+        assert!(url.contains("title=Sprint%2013"));
+        assert!(url.contains("notes=Sprint%20notes"));
+        assert!(url.contains("when=today"));
+        assert!(url.contains("deadline=2025-07-01"));
+        assert!(url.contains("tags=work%2Csprint"));
+        assert!(url.contains("area=Work"));
+        assert!(url.contains("to-dos="));
     }
 
     #[test]

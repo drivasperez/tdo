@@ -567,5 +567,63 @@ fn test_guide_ignores_json_flag() {
     );
 }
 
+// ── Project subcommands ──
+
+// r[verify cmd.project.tasks] r[verify cmd.project.tasks.columns]
+#[test]
+fn test_project_tasks_by_name() {
+    let db = fixtures::create_fixture_db();
+    let (out, _, ok) = run_tdo(db.path(), &["project", "tasks", "Test Project"]);
+    assert!(ok);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], "id\ttitle\ttags\tstartDate\tdeadline");
+    assert!(lines.iter().any(|l| l.contains("Today project task")));
+    assert!(lines.iter().any(|l| l.contains("Project child task")));
+}
+
+// r[verify cmd.project.tasks]
+#[test]
+fn test_project_tasks_by_uuid() {
+    let db = fixtures::create_fixture_db();
+    let (out, _, ok) = run_tdo(db.path(), &["project", "tasks", "project-test-1"]);
+    assert!(ok);
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(lines.iter().any(|l| l.contains("Today project task")));
+}
+
+// r[verify cmd.project.tasks]
+#[test]
+fn test_project_tasks_json() {
+    let db = fixtures::create_fixture_db();
+    let (out, _, ok) = run_tdo(db.path(), &["--json", "project", "tasks", "Test Project"]);
+    assert!(ok);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("invalid JSON");
+    let arr = parsed.as_array().unwrap();
+    assert!(arr.iter().any(|item| item["title"] == "Today project task"));
+    assert!(arr.iter().any(|item| item["title"] == "Project child task"));
+}
+
+// r[verify cmd.project.tasks]
+#[test]
+fn test_project_tasks_not_found() {
+    let db = fixtures::create_fixture_db();
+    let (_, stderr, ok) = run_tdo(db.path(), &["project", "tasks", "Nonexistent Project"]);
+    assert!(!ok);
+    assert!(
+        stderr.contains("not found"),
+        "expected 'not found' in: {stderr}"
+    );
+}
+
+// r[verify cmd.project.add] r[verify cmd.project.add.params] r[verify cmd.project.add.output]
+#[test]
+fn test_project_add_requires_title() {
+    let output = Command::new(env!("CARGO_BIN_EXE_tdo"))
+        .args(["project", "add"])
+        .output()
+        .expect("failed to run tdo");
+    assert!(!output.status.success()); // missing required <title>
+}
+
 // r[verify error.db-locked]
 // (Tested implicitly via retry logic in db.rs; difficult to trigger in integration test)

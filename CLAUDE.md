@@ -20,6 +20,16 @@ cargo build
 cargo test
 ```
 
+## Workflow rule: spec before code
+
+Before implementing any new feature or changing behavior:
+1. Check that a tracey requirement exists in `docs/spec/cli.md` covering the change
+2. If no requirement exists, add one first and get approval
+3. Only then implement the code with the matching `r[requirement.name]` annotation
+4. Add `r[verify requirement.name]` in the corresponding test
+
+Never implement functionality that isn't covered by a spec requirement.
+
 ## Architecture
 
 ```

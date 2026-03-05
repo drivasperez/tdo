@@ -204,6 +204,30 @@ r[cmd.update.params]
 Supports flags: `--title`, `--notes`, `--append-notes`, `--prepend-notes`,
 `--when`, `--deadline`, `--add-tags`, `--list`, `--heading`.
 
+### tdo project add \<title\>
+
+r[cmd.project.add]
+Creates a new project via the Things URL scheme (`things:///add-project`).
+Does not require an auth token.
+
+r[cmd.project.add.params]
+Supports flags: `--notes`, `--when` (today/tomorrow/evening/anytime/someday/date),
+`--deadline`, `--tags` (comma-separated), `--area` (area name or id),
+`--todo` (repeatable, adds tasks to the project).
+
+r[cmd.project.add.output]
+On success, prints the title of the created project.
+
+### tdo project tasks \<project\>
+
+r[cmd.project.tasks]
+Lists all open tasks belonging to a given project. The project can be specified
+by title (case-insensitive match) or UUID. Resolves project by name first (query
+TMTask where type=1 and title matches), then uses the UUID to find child tasks.
+
+r[cmd.project.tasks.columns]
+Default columns: `id`, `title`, `tags`, `startDate`, `deadline`.
+
 ### tdo move \<id\> --to \<list\>
 
 r[cmd.move]

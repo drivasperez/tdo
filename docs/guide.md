@@ -26,6 +26,14 @@ Tasks can belong to **Projects** (groups of related tasks) and projects can belo
 **Areas** (high-level categories like "Work" or "Personal"). Tasks can also have
 **Tags**, **Deadlines**, **Checklist items**, and **Notes**.
 
+## Limitations
+
+- **Projects** can be created via `tdo project add` but cannot be deleted or archived via CLI — use the Things UI for that.
+- **Project properties** (title, notes, etc.) cannot be modified after creation via CLI.
+- **Tags and areas** can only be listed (`tdo tags`, `tdo areas`), not created or modified via CLI.
+- **Write operations** use the Things URL scheme, which briefly opens Things. There may be a short delay before the database reflects the change.
+- `--list` and `--to` accept a project name (recommended) or project UUID.
+
 ## Typical workflow
 
 1. **List tasks** to see items and their UUIDs:
@@ -134,6 +142,16 @@ Default columns: `id`, `title`
 List all tags.
 Default columns: `id`, `title`, `shortcut`, `parent`
 
+### tdo project tasks \<project\>
+
+List all open tasks belonging to a project. Accepts project name (case-insensitive) or UUID.
+Default columns: `id`, `title`, `tags`, `startDate`, `deadline`
+
+```
+tdo project tasks "My Project"
+tdo project tasks project-uuid-here
+```
+
 ### tdo show \<id\>
 
 Show full details of a single item by UUID. Includes notes, checklist items, and tags.
@@ -168,6 +186,20 @@ tdo complete <id> --auth-token "your-token"
 ```
 
 Find your token in: **Things > Settings > General > Enable Things URLs > Authentication Token**
+
+### tdo project add \<title\>
+
+Create a new project. Does not require an auth token.
+
+```
+tdo project add "Sprint 13"
+tdo project add "House Renovation" --area "Personal" --deadline 2025-09-01
+tdo project add "Launch Plan" --todo "Write copy" --todo "Design assets" --todo "QA pass"
+```
+
+Flags: `--notes`, `--when` (today/tomorrow/evening/anytime/someday/YYYY-MM-DD),
+`--deadline` (YYYY-MM-DD), `--tags` (comma-separated), `--area` (area name or ID),
+`--todo` (repeatable, adds tasks to the project).
 
 ### tdo add \<title\>
 
@@ -235,3 +267,25 @@ These field names can be used with `--fields`:
 - **Check projects**: Use `tdo projects` to see available projects before assigning tasks with `--list`.
 - **Batch reading**: Run multiple list commands to build a complete picture of the user's task state.
 - **Auth token**: Set `TDO_AUTH_TOKEN` once in your environment to avoid passing it on every write command.
+
+## Common workflows
+
+### Create a project with tasks
+
+```
+tdo project add "Sprint 13" --todo "Design API" --todo "Implement endpoints" --todo "Write tests"
+```
+
+### List tasks in a project
+
+```
+tdo project tasks "Sprint 13"
+tdo project tasks "Sprint 13" --json
+```
+
+### Move tasks between projects
+
+```
+# Get task IDs from one project, then move them
+tdo project tasks "Old Project" --no-header --fields id | while read id; tdo move "$id" --to "New Project"; end
+```

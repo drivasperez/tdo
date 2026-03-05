@@ -470,6 +470,40 @@ pub fn show(conn: &Connection, id: &str) -> Result<Row, Error> {
     }
 }
 
+// r[cmd.project.tasks] r[cmd.project.tasks.columns]
+pub fn project_tasks(conn: &Connection, project: &str) -> Result<Vec<Row>, Error> {
+    // Try as UUID first
+    let project_uuid: Option<String> = conn
+        .query_row(
+            "SELECT uuid FROM TMTask WHERE uuid = ?1 AND type = 1",
+            [project],
+            |r| r.get(0),
+        )
+        .ok();
+
+    // If not a UUID, resolve by title (case-insensitive)
+    let project_uuid = match project_uuid {
+        Some(uuid) => uuid,
+        None => conn
+            .query_row(
+                "SELECT uuid FROM TMTask WHERE type = 1 AND title = ?1 COLLATE NOCASE AND trashed = 0",
+                [project],
+                |r| r.get(0),
+            )
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => Error::NotFound(format!("project '{project}'")),
+                other => Error::Sqlite(other),
+            })?,
+    };
+
+    query_tasks(
+        conn,
+        "t.project = ?1 AND t.status = 0 AND t.trashed = 0 AND t.type = 0",
+        "t.\"index\"",
+        &[&project_uuid as &dyn rusqlite::types::ToSql],
+    )
+}
+
 pub fn search(conn: &Connection, query: &str) -> Result<Vec<Row>, Error> {
     let pattern = format!("%{query}%");
     query_tasks(

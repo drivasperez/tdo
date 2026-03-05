@@ -195,6 +195,18 @@ pub fn create_fixture_db() -> FixtureDb {
         rusqlite::params!["task-today-project-1", "Today project task", "project-test-1"],
     ).unwrap();
 
+    // Insert a task in the project (not in today) for project tasks test
+    conn.execute(
+        "INSERT INTO TMTask (uuid, type, status, trashed, title, start, 'index', project) \
+         VALUES (?1, 0, 0, 0, ?2, 1, 11, ?3)",
+        rusqlite::params![
+            "task-project-child-1",
+            "Project child task",
+            "project-test-1"
+        ],
+    )
+    .unwrap();
+
     // Insert upcoming task (has future startDate)
     // encode 2025-12-15: (2025 << 16) | (12 << 12) | (15 << 7)
     let upcoming_date = (2025_i64 << 16) | (12 << 12) | (15 << 7);

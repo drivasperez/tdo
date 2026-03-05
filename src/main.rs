@@ -9,7 +9,7 @@ mod write;
 use clap::{Parser, Subcommand};
 use error::Error;
 use output::{Header, TsvConfig};
-use write::{AddParams, MacOsUrlOpener, UpdateParams, UrlOpener};
+use write::{AddParams, AddProjectParams, MacOsUrlOpener, UpdateParams, UrlOpener};
 
 // r[help.about]
 #[derive(Parser)]
@@ -200,6 +200,45 @@ enum Command {
         #[arg(long)]
         to: String,
     },
+    /// Manage projects (create, list tasks)
+    Project {
+        #[command(subcommand)]
+        command: ProjectCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProjectCommand {
+    /// Create a new project via the Things URL scheme (opens Things briefly).
+    /// Does not require an auth token.
+    Add {
+        /// Project title
+        title: String,
+        /// Notes
+        #[arg(long)]
+        notes: Option<String>,
+        /// When (today/tomorrow/evening/anytime/someday/date)
+        #[arg(long)]
+        when: Option<String>,
+        /// Deadline date
+        #[arg(long)]
+        deadline: Option<String>,
+        /// Tags (comma-separated)
+        #[arg(long)]
+        tags: Option<String>,
+        /// Area name or ID
+        #[arg(long)]
+        area: Option<String>,
+        /// Add a task to the project (can be repeated)
+        #[arg(long = "todo")]
+        todos: Vec<String>,
+    },
+    /// List all open tasks in a project (by name or UUID).
+    /// Default columns: id, title, tags, startDate, deadline
+    Tasks {
+        /// Project name or UUID
+        project: String,
+    },
 }
 
 fn run() -> Result<(), Error> {
@@ -237,6 +276,18 @@ fn run() -> Result<(), Error> {
         | Command::Cancel { .. }
         | Command::Update { .. }
         | Command::Move { .. } => run_write_command(&cli, &MacOsUrlOpener),
+        // Project subcommands — mixed read/write
+        Command::Project { command } => match command {
+            ProjectCommand::Tasks { .. } => {
+                let db_path = match &cli.db_path {
+                    Some(p) => p.clone(),
+                    None => db::find_db_path()?,
+                };
+                let conn = db::open_db(&db_path)?;
+                run_read_command(&cli, &conn)
+            }
+            ProjectCommand::Add { .. } => run_write_command(&cli, &MacOsUrlOpener),
+        },
     }
 }
 
@@ -359,6 +410,19 @@ fn run_read_command(cli: &Cli, conn: &rusqlite::Connection) -> Result<(), Error>
                 output::print_kv_tsv(&kvs, cli.header())?;
             }
         }
+        Command::Project {
+            command: ProjectCommand::Tasks { project },
+        } => {
+            let rows = queries::project_tasks(conn, project)?;
+            if cli.json {
+                output::print_json(&rows)?;
+            } else {
+                output::print_tsv(
+                    &rows,
+                    &cli.tsv_config(&["id", "title", "tags", "startDate", "deadline"]),
+                )?;
+            }
+        }
         _ => unreachable!(),
     }
     Ok(())
@@ -436,6 +500,31 @@ fn run_write_command(cli: &Cli, opener: &dyn UrlOpener) -> Result<(), Error> {
             let url = write::build_move_url(id, &token, to);
             opener.open(&url)?;
             println!("Moved: {id}");
+        }
+        Command::Project {
+            command:
+                ProjectCommand::Add {
+                    title,
+                    notes,
+                    when,
+                    deadline,
+                    tags,
+                    area,
+                    todos,
+                },
+        } => {
+            let url = write::build_add_project_url(&AddProjectParams {
+                title,
+                notes: notes.as_deref(),
+                when: when.as_deref(),
+                deadline: deadline.as_deref(),
+                tags: tags.as_deref(),
+                area: area.as_deref(),
+                todos,
+            });
+            opener.open(&url)?;
+            // r[cmd.project.add.output]
+            println!("Created project: {title}");
         }
         _ => unreachable!(),
     }
